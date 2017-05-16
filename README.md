@@ -1,2 +1,2 @@
 # email-engagement
-engagement analysis as part of email list hygiene
+creating an engagement timeframe to assist with email list hygiene
