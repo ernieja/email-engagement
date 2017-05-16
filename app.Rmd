@@ -1,0 +1,190 @@
+---
+title: 'Email List Hygiene: Email Engagement Timeframe'
+runtime: shiny
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(shiny)
+library(data.table)
+library(plyr)
+library(ggplot2)
+library(knitr)
+library(plotly)
+options(knitr.kable.NA = '')
+read_chunk('summary.R')
+```
+
+
+# Introduction
+
+Email recipients have previously been given a period of 60 days to engage in marketing emails, after which they were removed from mailing lists. I'm in the process of revamping our cleaning strategy for something more sophisticated. The first iteration of this project returned the number of drops within which 99% of our members' actions (opens, clicks, or leads) occured. I found, however, that cleaning out those who stayed unengaged beyond this drop did not boost our engagement numbers. 
+<br>
+<br>
+The goal for this preliminary analysis is to once again determine a reasonable benchmark for engagement. This time, however, the emphasis is placed on actual engagement frequency -- knowing the action rate per drop should give a more exact time frame. The targeted questions are as follows:
+
+* What is the optimal time frame for cleaning people who have never engaged?
+* Is molding the time frame around an overall action rate a better approach? 
+
+The cleaning time frame should satisfy two stipulations -- short enough to prevent wasting resources on recipients who will never engage, yet long enough to avoid losing out on potential leads. 
+<br>
+
+# Method
+
+For the purpose of this anlaysis, the optimal time frame is defined as the period within which the actions-to-sends proportion is greater than a predetermined(?) rate. I thus designed an interactive slider to filter the data by drop number and display the overall action rate.
+<br>
+
+## Data
+
+```{r include=FALSE}
+<<summary>>
+```
+The pulled data consists of all engagement 1/1/16 - 1/7/17. I excluded drops that classified as outliers; in this case, drop #110 and beyond.  
+
+```{r message=FALSE, echo=F}
+kable(summ, row.names = F, caption = "Summary of Final Dataset")
+```
+<br>
+<br>
+
+# Engagement Analysis
+
+Data were grouped by recipient address. After ordering and assigning numbers to each mailing, `[dropN]`, it is then possible to indicate engagement `WHERE opencount=1|clickcount=1|leadcount=1`. The tables generated below display snippets of these drop numbers and their respective sent count, action count, lead count, action rate, and lead rate.
+
+
+```{r include=FALSE}
+<<drops>>
+```
+
+```{r message=FALSE, echo=F}
+
+kable(head(drops), row.names = F, caption = "First 6 Drops")
+```
+```{r message=FALSE, echo=F}
+
+kable(tail(drops), row.names = F, caption = "Last 6 Drops")
+```
+
+
+As demonstrated below, filtering the drop numbers alters overall action rate and lead rate. 
+
+
+```{r, echo=FALSE}
+shinyApp(
+  ui = navbarPage(
+    
+      
+      title = "Engagement by Drop",
+      tabPanel("Engagement Charts",plotlyOutput("plot1"),
+               
+      verticalLayout(
+        wellPanel(
+          # Specification of drop range 
+          uiOutput("conditionalInput"),
+          tableOutput("values")
+          
+        )
+      ),
+      
+      
+        
+        # Show a table summarizing the values entered
+        
+        plotlyOutput("plot2"),
+        plotlyOutput("plot3")
+        
+      
+    ),
+    tabPanel("Stats by Drop",
+             dataTableOutput("dt"))),
+    
+    server = function(input, output) {
+      
+      
+      # Reactive expression to compose a data frame containing all of the values
+      sliderValues <- reactive({
+        a <- as.data.frame(drops[dropN >= input$range[1] & dropN <= input$range[2]]
+                           [,.(actionRate = 100*(sum(actionCount)/sum(sentCount)), leadRate = 100*(sum(leadCount)/sum(sentCount)))][1,])
+        names(a) <- c("Actions/Sent (%)", "Leads/Sent (%)")
+        
+        # Compose data frame
+        df <- cbind(data.frame(Drops = c(as.character(paste(input$range, collapse=' - '))), 
+                               stringsAsFactors=FALSE),a)
+        
+        
+      }) 
+      
+      
+      # Show the values using an HTML table
+      output$values <- renderTable({
+        
+        sliderValues()
+      })
+      
+      output$dt <- renderDataTable(drops)
+      
+      # filtered <- reactive({
+      #   if (input$outlier){
+      #     return(drops)
+      #   }
+      #   drops[dropN < 111]
+      # })
+      # 
+      output$conditionalInput <- renderUI({
+        
+          sliderInput("range", "Drop Range", 0, 110, value = c(1,110))
+      })
+
+      # show chart for sends
+      output$plot1 <- renderPlotly({
+        range <- seq(input$range[1], input$range[2])
+        
+        ggplot(drops, aes(x=dropN, y=sentCount)) +
+          labs(x="Drop Number", y="Send Count") +
+          xlim(min(range), max(range)) +
+          geom_bar(stat="identity") +
+          theme_bw(base_size = 11)
+        
+        
+      })
+      
+      # show chart for actionRate
+      output$plot2 <- renderPlotly({
+        range <- seq(input$range[1], input$range[2])
+        ggplot(drops) +
+          labs(x="Drop Number", y="Action Rate (%)") +
+          xlim(min(range), max(range)) +
+          geom_line(data=drops, aes(x=dropN, y=100*actionRate)) +
+          theme_bw(base_size = 11)
+        
+      }) 
+      
+      # show chart for leadRate
+      output$plot3 <- renderPlotly({
+        range <- seq(input$range[1], input$range[2])
+        ggplot(drops) +
+          labs(x="Drop Number", y="Lead Rate (%)") +
+          xlim(min(range), max(range)) +
+          geom_line(data=drops, aes(x=dropN, y=100*leadRate)) +
+          theme_bw(base_size = 11)
+        
+      })  
+
+      
+    },
+  options = list(height = 1000)
+)
+```
+
+\
+<br>
+<br>
+As expected, the action rate trends downward almost immediately, leveling off around drop 60. It makes sense that those who have made it to this drop (about 4 months out) without unsubscribing will continue to engage, offsetting the number of those who unsubscribe. A large dip occurs at drop 33, suggesting a reasonable benchmark for cleaning. Let's take a closer look at the numbers:
+<br>
+<br>
+Subsetting the data to within 60 drops only increases the overall action rate by 0.97%. That's 50 emails that make a neglibile difference. Removing another 27 drops to reach the magical #33 creates an overall rate of 14.49%. With such a large dip between drop 32 and 33, we can safely decide that those who have not engaged by drop 32 can be cleaned. This one action would theoretically increase our overall engagement by 2.42%.
+<br>
+<br>
+
+
+
