@@ -42,7 +42,7 @@ drops.eng <- eng.DT[, .(sumEng = sum(engaged)), by = n_row]
 drops.lead <- eng.DT[, .(sumLead = sum(leadcount)), by = n_row]
 
 
-# combine tables and calculate action/lead rates
+# merge tables and calculate action/lead rates
 drops.data <- cbind(drops.freq, drops.eng, drops.lead, actionRate = drops.eng$sumEng / drops.freq$N, 
                leadRate = drops.lead$sumLead/drops.freq$N)
 names(drops.data) <- c("n_row", "sentCount", "dropN", "actionCount", "n_row", "leadCount", "actionRate", "leadRate")
@@ -54,7 +54,7 @@ rm(drops.lead)
 
 
 
-## find outliers using standard 1.5 IQR
+## remove outliers using standard 1.5 IQR
 
 
 sent_outliers <- data.table(sentCount = boxplot.stats(drops.data$sentCount)$out)
@@ -67,15 +67,16 @@ fwrite(dropsNew, "drops_final.csv")
 ## materials for knitr
 
 
-eng.DT[2:3] <- list(NULL)
-eng.DT[5:10] <- list(NULL)
-eng.DT[5:16] <- list(NULL)
-eng.DT[5:7] <- list(NULL)
+final <- data.frame(eng.DT)
+final[2:3] <- list(NULL)
+final[5:10] <- list(NULL)
+final[5:16] <- list(NULL)
+final[5:7] <- list(NULL)
 
 
-eng.DT[c(3)] <- colwise(as.Date)(eng.DT[c(3)])
-eng.DT[,c(1,2,4)] <- colwise(as.factor)(eng.DT[,c(1,2,4)])
-summary <- summary(eng.DT[1:4])
+final[c(3)] <- colwise(as.Date)(final[c(3)])
+final[,c(1,2,4)] <- colwise(as.factor)(final[,c(1,2,4)])
+summary <- summary(final[1:4])
 
 saveRDS(summmary, "summary.rds")
 
